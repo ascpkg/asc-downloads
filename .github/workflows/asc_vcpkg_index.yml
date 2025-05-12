@@ -1,0 +1,54 @@
+name: asc vcpkg index
+
+on:
+  workflow_dispatch:
+  schedule:
+      - cron: '0 0 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    permissions: write-all
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check rust
+        run: |
+          rustc --version
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Prepare requirements
+        run: |
+          cargo install asc_bin
+
+      - name: Run asc vcpkg get
+        run: |
+          asc vcpkg get
+
+      - name: Run asc vcpkg index
+        run: |
+          asc vcpkg update --sync
+          asc vcpkg index --sync
+
+      - name: Archive asc vcpkg index
+        run: |
+          SHORT_COMMIT_HASH=$(cd $HOME/.local/share/asc/vcpkg && git rev-parse --short HEAD && cd - > /dev/null)
+          INDEX_DIR="$HOME/.local/share/asc/vcpkg.index"
+          ARCHIVE_NAME="vcpkg.index.${SHORT_COMMIT_HASH}.tar.xz"
+          ARCHIVE_PATH="$HOME/.local/share/asc/${ARCHIVE_NAME}"
+
+          tar -Jcf "${ARCHIVE_PATH}" -C "$HOME/.local/share/asc" vcpkg.index
+
+          echo "ARCHIVE_PATH=${ARCHIVE_PATH}" >> $GITHUB_ENV
+
+      - name: Upload asc vcpkg index
+        run: |
+          gh release upload vcpkg-index-archives "${{ env.ARCHIVE_PATH }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
